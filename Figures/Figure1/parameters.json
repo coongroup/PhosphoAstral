@@ -1,0 +1,37 @@
+{
+  "output": {
+  },
+  "input": {
+    "bin_size": 200,
+    "experiments": {
+      "orbi": {
+        "spectra": "C:\\Data\\NML_TPC_Phospho\\MouseTissueFractionAnalysis\\Raw\\OTOT\\20221207_250ng_phoshpo2_30min_grad_7to47B_120k15k_HCD30_DDA.tsv",
+        "msms": "C:\\Data\\NML_TPC_Phospho\\MouseTissueFractionAnalysis\\Raw\\OTOT\\combined\\txt\\msms.txt",
+        "psite": "C:\\Data\\NML_TPC_Phospho\\MouseTissueFractionAnalysis\\Raw\\OTOT\\combined\\txt\\Phospho (STY)Sites.txt",
+        "id": 25139,
+        "xlim": {
+          "min": 100,
+          "max": 1000
+        },
+        "ylim": {
+          "min": 40000,
+          "max": 300000
+        }
+      },
+      "astr": {
+        "spectra": "C:\\Data\\NML_TPC_Phospho\\MouseTissueFractionAnalysis\\Raw\\OTAT\\20221212_Coon_phospho1co_250ng_7to47B_30min_HCD27.tsv",
+        "msms": "C:\\Data\\NML_TPC_Phospho\\MouseTissueFractionAnalysis\\Raw\\OTAT\\combined\\txt\\msms.txt",
+        "psite": "C:\\Data\\NML_TPC_Phospho\\MouseTissueFractionAnalysis\\Raw\\OTAT\\combined\\txt\\Phospho (STY)Sites.txt",
+        "id": 132218,
+        "xlim": {
+          "min": 100,
+          "max": 1000
+        },
+        "ylim": {
+          "min": 40000,
+          "max": 300000
+        }
+      }
+    }
+  }
+}
