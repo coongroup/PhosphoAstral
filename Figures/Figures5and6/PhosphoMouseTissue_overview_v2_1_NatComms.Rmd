@@ -4,6 +4,8 @@ author: "Patrick Forny"
 date: "2023-10-01"
 ---
 
+Overview plots of the data.
+
 Load packages. 
 
 ```{r packages}
@@ -12,26 +14,7 @@ library(pacman)
 p_load(data.table)
 p_load(tidyverse)
 p_load(readxl)
-p_load(ggsci)
-p_load(patchwork)
-p_load(ggridges)
-p_load(ggplotify)
-p_load(ggpubr)
-p_load(plotly)
-p_load(ggpointdensity)
-p_load(ggrepel)
-p_load(pheatmap)
-p_load(ggfortify)
-p_load(RColorBrewer)
-p_load(viridis)
-p_load(ggvenn)
 p_load(ComplexUpset)
-p_load(eulerr)
-p_load(forcats)
-p_load(umap)
-p_load(dbscan)
-p_load(pals)
-
 
 ```
 
