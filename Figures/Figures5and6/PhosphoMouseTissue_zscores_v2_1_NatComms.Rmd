@@ -1,0 +1,263 @@
+---
+title: "Phosphoproteomics data set of multiple mouse tissues"
+author: "Patrick Forny"
+date: "2023-10-01"
+---
+
+Load packages. 
+
+```{r packages}
+# Load packages
+library(pacman)
+p_load(data.table)
+p_load(tidyverse)
+p_load(readxl)
+p_load(ggsci)
+p_load(patchwork)
+p_load(ggridges)
+p_load(ggplotify)
+p_load(ggpubr)
+p_load(plotly)
+p_load(ggpointdensity)
+p_load(ggrepel)
+p_load(pheatmap)
+p_load(ggfortify)
+p_load(RColorBrewer)
+p_load(viridis)
+p_load(ggvenn)
+p_load(ComplexUpset)
+p_load(eulerr)
+p_load(forcats)
+p_load(umap)
+
+```
+
+Load the data.
+
+```{r load data and prep}
+
+# vector of tissue names
+tissues_phospho <- c("BAT", "Brain", "Gastrocnemius", "Heart", "Kidney", "Liver", "Lung", "Pancreas", "Small_intestine", "Spleen", "SubWAT", "Testes")
+names(tissue_color_mapping) <- tissues_phospho
+
+
+
+## PHOSPHO DATA
+
+# phospho expression without protein expression normalization.
+phospho_tbl <- fread("data/v2/Phosphorylation.canonical.imputed.ver1.txt")
+# generate phospho key for each row
+phospho_tbl <- phospho_tbl %>%
+  dplyr::select(-c("Proteins", "Genes", "Positions")) %>% # only keep major genes
+  setNames(c("Protein", "Gene", "Position", "amino_acid", "flanking_region", tissues_phospho)) %>% # rename columns
+  mutate(phospho_key = paste0(Gene, "_", amino_acid, Position), .before = 1) %>%
+  filter(!duplicated(phospho_key)) # remove phospho_key duplicates (including the flanking region would make all of them unique, but we don't include the flanking region for now; only very few sites are removed)
+
+```
+
+Generate NA tables where the imputed values are replaces by NA entries. Also, create tables where imputed values are no longer negative.
+
+```{r NA and impute tables}
+
+## raw phospho data
+# transform imputed to NA values
+phospho_tbl_NA <- phospho_tbl %>%
+   mutate_at(vars(all_of(tissues_phospho)), ~ ifelse(. < 0, NA_real_, .))
+
+# also import the previously generated processed phospho table excluding imputed values, but with additional information:
+phospho_tbl_NA_2 <- fread(file = "phospho_sites_tbl_v2_1.csv")
+
+# remove minus signs from imputed values
+phospho_tbl_pos <- phospho_tbl %>%
+  mutate_at(.vars = tissues_phospho, .funs = list(~ abs(.)))
+
+
+```
+
+
+Import meta data.
+
+```{r load meta data}
+
+## META FILES
+
+# import MitoCarta pathways
+mito_crt_pathways <- readRDS("mitocarta3_pathways_mouse_pf_v0.Rdata")
+
+
+# import mito genes
+mc3 <- data.table(read_excel("Mouse.MitoCarta3.0.xls", sheet = 2))
+mc3_genes <- mc3$Symbol
+
+
+
+
+## PHOSPHO SITE PLUS DATA
+
+# all known phospho sites
+known_sites_tbl <- fread("Phosphorylation_site_dataset.gz")
+# check if the data set contains PTMs that are not phospho sites
+sum(grepl("-p", known_sites_tbl$MOD_RSD)) == nrow(known_sites_tbl)
+
+known_sites_tbl <- known_sites_tbl %>%
+  mutate(phospho_key = paste0(GENE, "_", gsub("-p", "", MOD_RSD)), .before = 1) %>% # create new column that matches the format of the identifier above 
+  filter(GENE != "") %>% # filter empty genes
+  arrange(GENE) %>% 
+  filter(ORGANISM == "mouse") # only keep mouse (experimental data set is derived from mouse tissues)
+
+
+# reference table that includes all known phospho sites with a characterized function
+characterized_sites_tbl <- fread("Regulatory_sites.gz")
+# check if the data set contains PTMs that are not phospho sites
+sum(grepl("-p", characterized_sites_tbl$MOD_RSD)) == nrow(characterized_sites_tbl)
+
+characterized_sites_tbl <- characterized_sites_tbl %>%
+  filter(grepl("-p", MOD_RSD)) %>% # only keep rows that are a phospho site (indicated by -p)
+  mutate(phospho_key = paste0(GENE, "_", gsub("-p", "", MOD_RSD)), .before = 1) %>% # create new column that matches the format of the identifier above
+  filter(ORGANISM == "mouse") # only keep mouse data  
+
+```
+
+Calculate z-scores.
+
+```{r z-score calculation}
+
+# calculate z-scores for each site across tissues.
+phospho_tbl_pos_zscores <- phospho_tbl_pos %>%
+  mutate(across(all_of(tissues_phospho), list(~ scale(.)), .names = "{.col}_z"))
+
+# calculate z-scores in a long-format table
+z_score_cutoff <- 2
+phospho_tbl_pos_zscores_long <- phospho_tbl_pos %>%
+  pivot_longer(cols = all_of(tissues_phospho), names_to = "tissue") %>%
+  group_by(phospho_key) %>%
+  mutate(z_score = scale(value)) %>%
+  ungroup() %>%
+  mutate(z_outlier = ifelse(abs(z_score) > z_score_cutoff, TRUE, FALSE)) %>%
+  mutate(MC3 = Protein %in% mc3_UniProt) %>%
+  mutate(amino_acid_metabolism = Gene %in% mito_crt_pathways$`Amino acid metabolism`,
+         carbohydrate_metabolism = Gene %in% mito_crt_pathways$`Carbohydrate metabolism`,
+         gluconeogenesis = Gene %in% mito_crt_pathways$Gluconeogenesis,
+         TCA_cycle = Gene %in% mito_crt_pathways$`TCA cycle`,
+         TCA_cycle_associated = Gene %in% mito_crt_pathways$`TCA-associated`,
+         pyruvate_metabolism = Gene %in% mito_crt_pathways$`Pyruvate metabolism`,
+         malate_asp_shuttle = Gene %in% mito_crt_pathways$`Malate-aspartate shuttle`,
+         ketone_metabolism = Gene %in% mito_crt_pathways$`Ketone metabolism`,
+         urea_cycle = Gene %in% mito_crt_pathways$`Urea cycle`,
+         lipid_metabolism = Gene %in% mito_crt_pathways$`Lipid metabolism`,
+         FAO = Gene %in% mito_crt_pathways$`Fatty acid oxidation`,
+         typeIIFAS = Gene %in% mito_crt_pathways$`Type II fatty acid synthesis`,
+         lipoate_insertion = Gene %in% mito_crt_pathways$`Lipoate insertion`,
+         cardiolipin_synt = Gene %in% mito_crt_pathways$`Cardiolipin synthesis`,
+         cholesterol_bile_steroid = Gene %in% mito_crt_pathways$`Cholesterol, bile acid, steroid synthesis`,
+         cholesterol_associated = Gene %in% mito_crt_pathways$`Cholesterol-associated`,
+         phospholipid = Gene %in% mito_crt_pathways$`Phospholipid metabolism`,
+         eicosanoid = Gene %in% mito_crt_pathways$`Eicosanoid metabolism`,
+         oxphos = Gene %in% mito_crt_pathways$OXPHOS,
+         prot_sorting =  Gene %in% mito_crt_pathways$`Protein import and sorting`,
+         mito_dogma =  Gene %in% mito_crt_pathways$`Mitochondrial central dogma`,
+         small_molecule_transport = Gene %in% mito_crt_pathways$`Small molecule transport`,
+         dynamics = Gene %in% mito_crt_pathways$`Mitochondrial dynamics and surveillance`,
+         signaling = Gene %in% mito_crt_pathways$Signaling,
+         cristae_formation = Gene %in% mito_crt_pathways$`Cristae formation`
+         ) %>%
+  left_join(mc3 %>% dplyr::select(c(UniProt, MitoCarta3.0_SubMitoLocalization)), by = c("Protein" = "UniProt")) %>%
+  left_join(mc3_all %>% dplyr::select(c(MitoCarta3.0_List, UniProt)), by = c("Protein" = "UniProt")) %>%
+  mutate(MitoCarta3.0_List = ifelse(MitoCarta3.0_List == 0, NA, MitoCarta3.0_List))
+
+
+```
+
+
+Simple plots to show z-score distributions and plots per phospho site.
+
+```{r z-score plots}
+
+phospho_tbl_pos_zscores_long %>%
+  mutate(brain = ifelse(tissue == "Brain", TRUE, FALSE)) %>%
+  ggplot() +
+  aes(x = z_score, fill = brain) +
+  geom_histogram() +
+  facet_wrap(.~tissue) +
+  labs(title = "Distribution of z-scores across tissues", subtitle = "Z-scores are calculated per phospho site", x = "Z-score", y = "Count of phospho sites", fill = "") +
+  scale_fill_manual(values = c("darkgrey", mypal_sig[1])) +
+  theme_bw() + theme(strip.background = element_blank(), legend.position = "none")
+
+# outliers are defined as abs(z-score) >2; plot number of outliers per tissue (WITH NOVEL SITES)
+
+phospho_tbl_pos_zscores_long %>%
+  mutate(known_site = ifelse(phospho_key %in% unique(known_sites_tbl$phospho_key), TRUE, FALSE), .before = 1) %>% # add known site info
+  mutate(characterized_site = ifelse(phospho_key %in% unique(characterized_sites_tbl$phospho_key), TRUE, FALSE), .before = 1) %>% # add characterized site info
+  mutate(novel_site = ifelse(known_site, FALSE, TRUE), .before = 1) %>%
+  mutate(known_site_rev = ifelse(known_site & characterized_site, FALSE, known_site), .before = 1) %>% # if a site is characterized is automatically also known, so don't count this site twice, only count it in characterized category
+  filter(z_outlier) %>% 
+  group_by(tissue) %>%
+  summarise(outlier_count = sum(z_outlier), novel_sites = sum(novel_site)) %>%
+  ggplot() +
+  aes(x = fct_reorder(tissue, -outlier_count), y = outlier_count, fill = novel_sites) +
+  geom_col() +
+  geom_text(aes(label = outlier_count), nudge_y = 300, size = label_text_size) +
+  labs(title = "Number of outliers per tissue (abs(z-score) > 2)", x = "Tissue", y = "Count of phospho sites", fill = "Number of novel sites") +
+  scale_fill_gradient(low = mypal_sig[1], high = mypal_sig[2]) +
+  theme_classic() + 
+  rotate_x_text(angle = 45)
+
+
+# highlight Opa1 in brain
+phospho_tbl_pos_zscores_longMC3 %>%
+  filter(tissue == "Brain") %>%
+  ggplot() +
+  aes(x = fct_reorder(phospho_key, -z_score), y = z_score) +
+  geom_point(shape = 21, color = "grey") +
+  annotate("rect", xmin = -Inf, xmax = Inf, ymin = -z_score_cutoff, ymax = z_score_cutoff, fill = "grey", alpha = 0.6) +
+  geom_hline(yintercept = c(-z_score_cutoff, z_score_cutoff), linetype = "dashed", color = "grey") +
+  geom_text_repel(data = phospho_tbl_pos_zscores_longMC3 %>% filter(tissue == "Brain" & phospho_key == "Opa1_S298"), aes(label = phospho_key), size = label_text_size, nudge_x = 300) +
+  geom_point(data = phospho_tbl_pos_zscores_longMC3 %>% filter(tissue == "Brain" & phospho_key == "Opa1_S298"), color = "darkred", size = 2) +
+  coord_cartesian(clip = "off") +
+  scale_y_continuous(limits = c(-4, 3)) +
+  scale_x_discrete(expand = c(0.01, 0)) +
+  labs(title = "Ranked brain phospho sites (imputed data)", x = "Phospho site", y = "Z-score") +
+  theme_test() + pf_plt +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), strip.background = element_blank())
+ggsave(filename = paste0(FIGURE_DIR, "Zscore_ranks_imputed_Brain_Opa1_small.pdf"), device = pdf(), width = 5, height = 3)
+
+```
+
+Calculate z-scores on pan-tissue sites only.
+
+```{r z-score pan-tissue}
+
+# use table with pan-tissue sites only.
+# calculate z-scores in a long-format table
+z_score_cutoff <- 2
+phospho_tbl_NA_2_zscores_long <- phospho_tbl_NA_2 %>%
+  filter(No_tissues_site_present == 12) %>%
+  pivot_longer(cols = all_of(tissues_phospho), names_to = "tissue") %>%
+  group_by(phospho_key) %>%
+  mutate(z_score = scale(value)) %>%
+  ungroup() %>%
+  mutate(z_outlier = ifelse(abs(z_score) > z_score_cutoff, TRUE, FALSE))
+
+```
+
+visualize z-score in a heatmap.
+
+```{r z-score heatmap}
+
+heatmap_tbl <- phospho_tbl_NA_2_zscores_long %>%
+  dplyr::select(c(z_score, tissue, phospho_key)) %>%
+  pivot_wider(names_from = phospho_key, values_from = z_score) %>%
+  column_to_rownames(var = "tissue")
+
+as.ggplot(pheatmap(heatmap_tbl, 
+                   show_rownames = TRUE,
+                   show_colnames = FALSE,
+                   border_color = "none", 
+                   color = rev(colorRampPalette(brewer.pal(10, "RdBu"))(1000)))
+) + labs(title = "Clustering based on z-scores of pan-tissue phospho sites") + theme(plot.title = element_text(size = 10))
+ggsave(filename = paste0(FIGURE_DIR, "Zscore_Heatmap_panTissue.pdf"), device = pdf(), width = 5, height = 4)
+
+```
+
+
+

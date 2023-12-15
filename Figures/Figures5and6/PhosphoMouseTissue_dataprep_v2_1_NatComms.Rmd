@@ -1,0 +1,159 @@
+---
+title: "Phosphoproteomics data set of multiple mouse tissues"
+author: "Patrick Forny"
+date: "2023-10-01"
+---
+
+Pre-processing of data and gathering of meta data.
+
+
+Load packages. 
+
+```{r packages}
+# Load packages
+library(pacman)
+p_load(data.table)
+p_load(tidyverse)
+p_load(readxl)
+
+
+```
+
+Load the data. Negative sings indicate imputed values. Phospho data has been normalized to protein values where indicated.
+
+```{r load data and prep}
+
+# vector of tissue names
+tissues_phospho <- c("BAT", "Brain", "Gastrocnemius", "Heart", "Kidney", "Liver", "Lung", "Pancreas", "Small_intestine", "Spleen", "SubWAT", "Testes")
+names(tissue_color_mapping) <- tissues_phospho
+
+
+## PHOSPHO DATA
+
+# phospho expression without protein expression normalization.
+phospho_tbl <- fread("data/v2/Phosphorylation.canonical.imputed.ver1.txt")
+# generate phospho key for each row
+phospho_tbl <- phospho_tbl %>%
+  dplyr::select(-c("Proteins", "Genes", "Positions")) %>% # only keep major genes
+  setNames(c("Protein", "Gene", "Position", "amino_acid", "flanking_region", tissues_phospho)) %>% # rename columns
+  mutate(phospho_key = paste0(Gene, "_", amino_acid, Position), .before = 1) %>%
+  filter(!duplicated(phospho_key)) # remove phospho_key duplicates (including the flanking region would make all of them unique, but we don't include the flanking region for now; only very few sites are removed)
+
+
+```
+
+Generate NA tables where the imputed values are replaces by NA entries. Also, create tables where imputed values are no longer negative.
+
+```{r NA and impute tables}
+
+## raw phospho data
+# transform imputed to NA values
+phospho_tbl_NA <- phospho_tbl %>%
+   mutate_at(vars(all_of(tissues_phospho)), ~ ifelse(. < 0, NA_real_, .))
+
+# remove minus signs from imputed values
+phospho_tbl_pos <- phospho_tbl %>%
+  mutate_at(.vars = tissues_phospho, .funs = list(~ abs(.)))
+
+
+```
+
+
+Import meta data.
+
+```{r load meta data}
+
+## META FILES
+
+# import MitoCarta pathways
+mito_crt_pathways <- readRDS("mitocarta3_pathways_mouse_pf_v0.Rdata")
+
+
+# import mito genes
+mc3 <- data.table(read_excel("Mouse.MitoCarta3.0.xls", sheet = 2))
+mc3_UniProt <- mc3$UniProt
+
+## PHOSPHO SITE PLUS DATA
+
+# all known phospho sites
+known_sites_tbl <- fread("Phosphorylation_site_dataset.gz")
+# check if the data set contains PTMs that are not phospho sites
+sum(grepl("-p", known_sites_tbl$MOD_RSD)) == nrow(known_sites_tbl)
+
+known_sites_tbl <- known_sites_tbl %>%
+  mutate(phospho_key = paste0(GENE, "_", gsub("-p", "", MOD_RSD)), .before = 1) %>% # create new column that matches the format of the identifier above 
+  filter(GENE != "") %>% # filter empty genes
+  arrange(GENE) %>% 
+  filter(ORGANISM == "mouse") # only keep mouse (experimental data set is derived from mouse tissues)
+
+
+# reference table that includes all known phospho sites with a characterized function
+characterized_sites_tbl <- fread("Regulatory_sites.gz")
+# check if the data set contains PTMs that are not phospho sites
+sum(grepl("-p", characterized_sites_tbl$MOD_RSD)) == nrow(characterized_sites_tbl)
+
+characterized_sites_tbl <- characterized_sites_tbl %>%
+  filter(grepl("-p", MOD_RSD)) %>% # only keep rows that are a phospho site (indicated by -p)
+  mutate(phospho_key = paste0(GENE, "_", gsub("-p", "", MOD_RSD)), .before = 1) %>% # create new column that matches the format of the identifier above
+  filter(ORGANISM == "mouse") # only keep mouse data  
+
+```
+
+Generate table that indicates which sites are unique. Also add other meta columns that allow filtering.
+
+```{r unique table}
+
+phospho_tbl_NA_2 <- phospho_tbl_NA %>%
+  # slice_head(n = 5000) %>%
+  mutate(No_tissues_site_present = length(tissues_phospho) - rowSums(is.na(select(., all_of(tissues_phospho)))), .before = 1) %>% # count NA values per row
+  rowwise() %>%
+  mutate(non_na_columns = list(names(select(., all_of(tissues_phospho)))[!is.na(c_across(all_of(tissues_phospho)))]), .before = 1) %>% # extract column names that don't have NA
+  ungroup() %>%
+  mutate(occurrence_in_tissues = sapply(non_na_columns, function(names_list) paste(names_list, collapse = ", ")), .before = 1, .keep = "unused") %>% # transform column names into comma-separated string
+  mutate(known_site = ifelse(phospho_key %in% unique(known_sites_tbl$phospho_key), TRUE, FALSE), .before = 1) %>% # add known site info
+  mutate(characterized_site = ifelse(phospho_key %in% unique(characterized_sites_tbl$phospho_key), TRUE, FALSE), .before = 1) %>% # add characterized site info
+  mutate(MC3 = Protein %in% mc3_UniProt) %>%
+  mutate(amino_acid_metabolism = Gene %in% mito_crt_pathways$`Amino acid metabolism`,
+         carbohydrate_metabolism = Gene %in% mito_crt_pathways$`Carbohydrate metabolism`,
+         gluconeogenesis = Gene %in% mito_crt_pathways$Gluconeogenesis,
+         TCA_cycle = Gene %in% mito_crt_pathways$`TCA cycle`,
+         TCA_cycle_associated = Gene %in% mito_crt_pathways$`TCA-associated`,
+         pyruvate_metabolism = Gene %in% mito_crt_pathways$`Pyruvate metabolism`,
+         malate_asp_shuttle = Gene %in% mito_crt_pathways$`Malate-aspartate shuttle`,
+         ketone_metabolism = Gene %in% mito_crt_pathways$`Ketone metabolism`,
+         urea_cycle = Gene %in% mito_crt_pathways$`Urea cycle`,
+         lipid_metabolism = Gene %in% mito_crt_pathways$`Lipid metabolism`,
+         FAO = Gene %in% mito_crt_pathways$`Fatty acid oxidation`,
+         typeIIFAS = Gene %in% mito_crt_pathways$`Type II fatty acid synthesis`,
+         lipoate_insertion = Gene %in% mito_crt_pathways$`Lipoate insertion`,
+         cardiolipin_synt = Gene %in% mito_crt_pathways$`Cardiolipin synthesis`,
+         cholesterol_bile_steroid = Gene %in% mito_crt_pathways$`Cholesterol, bile acid, steroid synthesis`,
+         cholesterol_associated = Gene %in% mito_crt_pathways$`Cholesterol-associated`,
+         phospholipid = Gene %in% mito_crt_pathways$`Phospholipid metabolism`,
+         eicosanoid = Gene %in% mito_crt_pathways$`Eicosanoid metabolism`,
+         oxphos = Gene %in% mito_crt_pathways$OXPHOS,
+         prot_sorting =  Gene %in% mito_crt_pathways$`Protein import and sorting`,
+         mito_dogma =  Gene %in% mito_crt_pathways$`Mitochondrial central dogma`,
+         small_molecule_transport = Gene %in% mito_crt_pathways$`Small molecule transport`,
+         dynamics = Gene %in% mito_crt_pathways$`Mitochondrial dynamics and surveillance`,
+         signaling = Gene %in% mito_crt_pathways$Signaling,
+         cristae_formation = Gene %in% mito_crt_pathways$`Cristae formation`
+         ) %>%
+  left_join(mc3 %>% dplyr::select(c(UniProt, MitoCarta3.0_SubMitoLocalization)), by = c("Protein" = "UniProt")) %>%
+  left_join(mc3_all %>% dplyr::select(c(MitoCarta3.0_List, UniProt)), by = c("Protein" = "UniProt")) %>%
+  mutate(MitoCarta3.0_List = ifelse(MitoCarta3.0_List == 0, NA, MitoCarta3.0_List))
+  
+
+fwrite(phospho_tbl_NA_2, file = "phospho_sites_tbl_v2_1.csv")
+
+
+
+```
+
+
+
+
+
+
+
+

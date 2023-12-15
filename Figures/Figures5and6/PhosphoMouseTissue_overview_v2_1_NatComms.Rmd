@@ -1,0 +1,408 @@
+---
+title: "Phosphoproteomics data set of multiple mouse tissues"
+author: "Patrick Forny"
+date: "2023-10-01"
+---
+
+Load packages. 
+
+```{r packages}
+# Load packages
+library(pacman)
+p_load(data.table)
+p_load(tidyverse)
+p_load(readxl)
+p_load(ggsci)
+p_load(patchwork)
+p_load(ggridges)
+p_load(ggplotify)
+p_load(ggpubr)
+p_load(plotly)
+p_load(ggpointdensity)
+p_load(ggrepel)
+p_load(pheatmap)
+p_load(ggfortify)
+p_load(RColorBrewer)
+p_load(viridis)
+p_load(ggvenn)
+p_load(ComplexUpset)
+p_load(eulerr)
+p_load(forcats)
+p_load(umap)
+p_load(dbscan)
+p_load(pals)
+
+
+```
+
+Load the data. The data has been imputed where indicated. Negative sings indicate imputed values.
+
+```{r load data and prep}
+
+# vector of tissue names
+tissues_phospho <- c("BAT", "Brain", "Gastrocnemius", "Heart", "Kidney", "Liver", "Lung", "Pancreas", "Small_intestine", "Spleen", "SubWAT", "Testes")
+names(tissue_color_mapping) <- tissues_phospho
+
+
+# PHOSPHO DATA
+
+# phospho expression without protein expression normalization.
+phospho_tbl <- fread("Phosphorylation.canonical.imputed.ver1.txt")
+# generate phospho key for each row
+phospho_tbl <- phospho_tbl %>%
+  dplyr::select(-c("Proteins", "Genes", "Positions")) %>% # only keep major genes
+  setNames(c("Protein", "Gene", "Position", "amino_acid", "flanking_region", tissues_phospho)) %>% # rename columns
+  mutate(phospho_key = paste0(Gene, "_", amino_acid, Position), .before = 1) %>%
+  filter(!duplicated(phospho_key)) # remove phospho_key duplicates (including the flanking region would make all of them unique, but we don't include the flanking region for now; only very few sites are removed)
+
+```
+
+Generate NA tables where the imputed values are replaces by NA entries. Also, create tables where imputed values are no longer negative.
+
+```{r NA and impute tables}
+
+## raw phospho data
+# transform imputed to NA values
+phospho_tbl_NA <- phospho_tbl %>%
+   mutate_at(vars(all_of(tissues_phospho)), ~ ifelse(. < 0, NA_real_, .))
+
+# also import the processed phospho table generated in "[...]dataprep_v2_1_" excluding imputed values, but with additional information:
+phospho_tbl_NA_2 <- fread(file = "phospho_sites_tbl_v2_1.csv")
+
+# remove minus signs from imputed values
+phospho_tbl_pos <- phospho_tbl %>%
+  mutate_at(.vars = tissues_phospho, .funs = list(~ abs(.)))
+
+
+```
+
+
+Import meta data.
+
+```{r load meta data}
+
+## META FILES
+
+# import MitoCarta pathways
+mito_crt_pathways <- readRDS("mitocarta3_pathways_mouse_pf_v0.Rdata")
+
+
+# import mito genes
+mc3 <- data.table(read_excel("Mouse.MitoCarta3.0.xls", sheet = 2))
+mc3_genes <- mc3$Symbol
+
+
+
+
+## PHOSPHO SITE PLUS DATA
+
+# all known phospho sites
+known_sites_tbl <- fread("Phosphorylation_site_dataset.gz")
+# check if the data set contains PTMs that are not phospho sites
+sum(grepl("-p", known_sites_tbl$MOD_RSD)) == nrow(known_sites_tbl)
+
+known_sites_tbl <- known_sites_tbl %>%
+  mutate(phospho_key = paste0(GENE, "_", gsub("-p", "", MOD_RSD)), .before = 1) %>% # create new column that matches the format of the identifier above 
+  filter(GENE != "") %>% # filter empty genes
+  arrange(GENE) %>% 
+  filter(ORGANISM == "mouse") # only keep mouse (experimental data set is derived from mouse tissues)
+
+
+# reference table that includes all known phospho sites with a characterized function
+characterized_sites_tbl <- fread("Regulatory_sites.gz")
+# check if the data set contains PTMs that are not phospho sites
+sum(grepl("-p", characterized_sites_tbl$MOD_RSD)) == nrow(characterized_sites_tbl)
+
+characterized_sites_tbl <- characterized_sites_tbl %>%
+  filter(grepl("-p", MOD_RSD)) %>% # only keep rows that are a phospho site (indicated by -p)
+  mutate(phospho_key = paste0(GENE, "_", gsub("-p", "", MOD_RSD)), .before = 1) %>% # create new column that matches the format of the identifier above
+  filter(ORGANISM == "mouse") # only keep mouse data  
+
+
+```
+
+```{r unique check}
+
+# check if sites are unique
+length(unique(phospho_tbl$phospho_key)) == nrow(phospho_tbl)
+length(unique(phospho_tbl_NA$phospho_key)) == nrow(phospho_tbl_NA)
+
+```
+
+
+Count the unique sites per tissue.
+
+```{r unique sites}
+
+# count unique sites per tissue
+unique_sites_tbl <- phospho_tbl_NA[, c(tissues_phospho, "phospho_key"), with = FALSE]
+unique_sites_tbl1 <- unique_sites_tbl[rowSums(is.na(unique_sites_tbl[, tissues_phospho, with = FALSE]), na.rm = TRUE) == 11, ]
+unique_sites_tbl2 <- melt(unique_sites_tbl1, id.vars = "phospho_key")
+unique_sites_tbl3 <- melt(table(unique_sites_tbl2[!is.na(unique_sites_tbl2$value), variable]))
+colnames(unique_sites_tbl3) <- c("tissue", "unique_sites")
+
+# count number of total phospho sites per tissue
+total_sites <- melt(!is.na(phospho_tbl_NA[, c(tissues_phospho), with = FALSE])) %>% 
+  select(Var2, value) %>%
+  filter(value == TRUE) %>%
+  count(Var2)
+colnames(total_sites) <- c("tissue", "total_sites")
+
+# combine both dataframes
+all_sites <- merge(unique_sites_tbl3, total_sites, by = "tissue") %>% mutate(not_unique_sites = total_sites - unique_sites)
+
+
+most_unique_sites_tissue <- all_sites %>%
+  dplyr::select(-total_sites) %>%
+  pivot_longer(cols = -tissue) %>%
+  filter(name == "unique_sites") %>%
+  arrange(-value) %>%
+  pull(tissue)
+
+all_sites %>%
+  dplyr::select(-total_sites) %>%
+  pivot_longer(cols = -tissue) %>%
+  mutate(tissue = factor(tissue, levels = most_unique_sites_tissue)) %>%
+  ggplot() +
+  aes(x = tissue,  y = value, fill = fct_rev(name)) +
+  geom_col() +
+  labs(title = "Unique and non-unique phospho sites", x = "Tissue", y = "Count") +
+  theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.title = element_blank())
+
+```
+
+
+Now, that we know which phospho sites are unique draw an upset plot to illustrate how the intersections between the different tissues look.
+
+```{r upset plot}
+
+complex_upset_tbl <- phospho_tbl_NA[, c(tissues_phospho), with = FALSE]
+complex_upset_tbl1 <- data.table(!is.na(complex_upset_tbl))
+
+min_intersection_size <- 200
+
+upset_plt_all <- upset(complex_upset_tbl, tissues_phospho,
+      name = "",
+      width_ratio = 0.2, 
+      min_size = min_intersection_size,
+      queries = list(
+        upset_query(set = tissues_phospho[1], fill = mypal[1]),
+        upset_query(set = tissues_phospho[2], fill = mypal[2]),
+        upset_query(set = tissues_phospho[3], fill = mypal[3]),
+        upset_query(set = tissues_phospho[4], fill = mypal[4]),
+        upset_query(set = tissues_phospho[5], fill = mypal[5]),
+        upset_query(set = tissues_phospho[6], fill = mypal[6]),
+        upset_query(set = tissues_phospho[7], fill = mypal[7]),
+        upset_query(set = tissues_phospho[8], fill = mypal[8]),
+        upset_query(set = tissues_phospho[9], fill = mypal[9]),
+        upset_query(set = tissues_phospho[10], fill = mypal[10]),
+        upset_query(set = tissues_phospho[11], fill = mypal[11]),
+        upset_query(set = tissues_phospho[12], fill = mypal[12])
+        ),
+      set_sizes = upset_set_size(position = "left") + theme(axis.text = element_text(size = 8, color = "black")),
+      themes = upset_modify_themes(
+        list(
+          "Intersection size" = theme(
+            axis.text = element_text(size = 8, color = "black")
+          )
+        )
+      ),
+      base_annotations = list(
+        "Intersection size" = intersection_size(
+          text = list(size = label_text_size)
+        )
+      ),
+      wrap = TRUE
+      ) + ggtitle("Intersections of all phospho sites", subtitle = paste0("Intersection size >= ", min_intersection_size)) + theme(axis.text = element_text(color = "black"), plot.title = element_text(size = 10), plot.subtitle = element_text(size = 8))
+
+upset_plt_all
+
+
+# limit phospho sites to mitochondrial proteins
+
+complex_upset_mc3 <- phospho_tbl_NA_2[, c(tissues_phospho), with = FALSE]
+complex_upset_mc3_1 <- cbind(data.table(!is.na(complex_upset_mc3)), data.table(mito_localization = phospho_tbl_NA_2$MitoCarta3.0_SubMitoLocalization, MC3 = phospho_tbl_NA_2$MC3))
+complex_upset_mc3_2 <- complex_upset_mc3_1 %>% filter(MC3)
+
+min_intersection_size_mc3 <- 12
+
+mypal_upset <- c(mypal_sig[1:3], mypal[5:8], mypal_sig[4])
+
+upset_plt_mc3 <- upset(complex_upset_mc3_2, tissues_phospho,
+      name = "",
+      width_ratio = 0.2, 
+      min_size = min_intersection_size_mc3,
+      set_sizes = upset_set_size(geom = geom_bar(aes(fill = mito_localization)), position = "right") + scale_fill_manual(values = mypal_upset) + theme(axis.text = element_text(size = 8, color = "black")),
+      guides = "over",
+      themes = upset_modify_themes(
+        list(
+          "Intersection size" = theme(
+            axis.text = element_text(size = 8, color = "black")
+          ),
+          "intersections_matrix" = theme(axis.text = element_text(color = "black"))
+        )
+      ),
+      base_annotations = list(
+        "Intersection size" = intersection_size(
+          text = list(size = label_text_size),
+          counts = TRUE,
+          mapping = aes(fill = mito_localization)
+        ) + scale_fill_manual(values = mypal_upset) + theme(legend.title = element_blank())
+      ),
+      wrap = TRUE
+      ) + ggtitle("Intersections of MitoCarta3.0 phospho sites", subtitle = paste0("Intersection size >= ", min_intersection_size_mc3)) + theme(plot.title = element_text(size = 10), plot.subtitle = element_text(size = 8))
+upset_plt_mc3
+
+
+```
+
+
+
+Check unique sites in liver.
+
+```{r unique liver sites}
+
+liver_site_occurrence <- phospho_tbl_NA_2 %>%
+  filter(occurrence_in_tissues == "Liver") %>%
+  filter(Gene != "") %>%
+  mutate(novel_site = ifelse(known_site, FALSE, TRUE), .before = 1) %>%
+  mutate(known_site_rev = ifelse(known_site & characterized_site, FALSE, known_site), .before = 1) %>% # if a site is characterized is automatically also known, so don't count this site twice, only count it in characterized category
+  group_by(Gene) %>%
+  summarise(known_sites = sum(known_site_rev), characterized_sites = sum(characterized_site), novel_sites = sum(novel_site)) %>%
+  rowwise() %>%
+  mutate(total_sites = sum(c_across(-Gene), na.rm = TRUE))
+
+liver_site_occurrence %>%
+  ggplot() +
+  aes(x = total_sites, y = fct_reorder(Gene, total_sites), color = novel_sites) +
+  geom_point() +
+  geom_text_repel(data = liver_site_occurrence %>% filter(Gene == "Cps1"), aes(label = Gene), color = "black", size = label_text_size, nudge_x = -4, nudge_y = 100) +
+  geom_point() +
+  coord_cartesian(clip = 'off') +
+  labs(title = "All unique liver phospho sites", x = "Number of detected phospho sites", y = "Phosphorylated protein rank", color = "Number of novel sites") +
+  theme_classic() + pf_plt + 
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+
+
+
+```
+
+
+Calculate occurrence of phospho sites.
+
+```{r occurrence of phospho sites}
+
+# create table
+site_tbl <- phospho_tbl_NA_2 %>% dplyr::select(c(MC3, all_of(tissues_phospho)))
+
+site_tbl %>% 
+  dplyr::select(-MC3) %>%
+  mutate(site_count = rowSums(!is.na(.)), .before = 1) %>%
+  group_by(site_count) %>%
+  summarise(count = n()) %>%
+  ggplot() +
+  aes(x = factor(site_count), y = count) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = count), nudge_y = 500, size = label_text_size) +
+  labs(title = "Occurrence of phospho sites", x = "Number of tissues a phospho site is present", y = "Count of phospho sites") +
+  theme_classic()
+
+# mito sites only
+site_tbl_new <- phospho_tbl_NA_2 %>%
+  filter(MC3) %>%
+  filter(Gene != "") %>%
+  rowwise() %>%
+  mutate(site_count = sum(!is.na(c_across(all_of(tissues_phospho)))), .before = 1) %>%
+  dplyr::select(c(characterized_site, known_site, Gene, site_count)) %>%
+  mutate(novel_site = ifelse(known_site, FALSE, TRUE), .before = 1) %>%
+  mutate(known_site_rev = ifelse(known_site & characterized_site, FALSE, known_site), .before = 1) %>% # if a site is characterized is automatically also known, so don't count this site twice, only count it in characterized category
+  group_by(site_count) %>%
+  summarise(count = n(), known_sites = sum(known_site_rev), characterized_sites = sum(characterized_site), novel_sites = sum(novel_site)) %>%
+  rowwise() %>%
+  mutate(total = sum(c_across(-c(site_count, count)), na.rm = TRUE))
+
+site_tbl_new %>%
+  ggplot() +
+  aes(x = factor(site_count), y = count, fill = novel_sites) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = count), nudge_y = 24, size = label_text_size) +
+  labs(title = "Occurrence of mitochondrial phospho sites", x = "Number of tissues a phospho site is present", y = "Count of phospho sites", fill = "Number of novel sites") +
+  scale_fill_gradient(low = mypal_sig[1], high = mypal_sig[2]) +
+  theme_classic()
+
+
+```
+
+Barplot of new sites in our dataset, as an alternative to Venn.
+
+```{r new sites in our data}
+
+phospho_tbl_NA_2 %>%
+  dplyr::select(c(phospho_key, known_site, characterized_site)) %>%
+  mutate(novel_site = ifelse(known_site == FALSE, TRUE, FALSE)) %>%
+  mutate(known_site_rev = ifelse(known_site & characterized_site, FALSE, known_site)) %>% # if a site is characterized is automatically also known, so don't count this site twice, only count it in characterized category
+  summarise(known_sites = sum(known_site_rev), characterized_sites = sum(characterized_site), novel_sites = sum(novel_site)) %>%
+  pivot_longer(cols = everything()) %>%
+  mutate(prop = value / sum(value)) %>%
+  ggplot() +
+  aes(x = name, y = value, fill = fct_rev(name)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = paste0(round(prop*100, 1), "%")), nudge_y = 1000, size = label_text_size) +
+  labs(title = "All detected phospho sites", x = "PhosphoSitePlus category", y = "Number of phospho sites", fill = "") +
+  theme_classic() +
+  theme(axis.text.x = element_blank())
+
+```
+
+
+Check how mito proteins are represtend in the dataset.
+
+```{r mito subset}
+
+data.frame(data = "Phosphorylated", count = phospho_tbl_NA_2 %>%
+  filter(MC3) %>%
+  dplyr::select(Protein) %>%
+  unique() %>%
+  nrow()
+) %>% bind_rows(data.frame(data = "Not phosphorylated", count = length(mc3_UniProt) - phospho_tbl_NA_2 %>%
+  filter(MC3) %>%
+  dplyr::select(Protein) %>%
+  unique() %>%
+  nrow())) %>%
+  mutate(prop = count / sum(count)) %>%
+  ggplot() +
+  aes(x = data, y = count, fill = fct_rev(data)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = paste0(round(prop*100, 1), "%")), nudge_y = 20, size = label_text_size) +
+  labs(title = "MitoCarta 3.0 proteins", x = "", y = "Number of proteins", fill = "") +
+  theme_classic() +
+  theme(axis.text.x = element_blank())
+
+
+```
+
+Investigate TCA-cycle phospho sites.
+
+```{r TCA}
+# count phospho sites on TCA proteins
+
+phospho_tbl_NA_2 %>%
+  filter(Gene %in% mito_crt_pathways$`TCA cycle`) %>%
+  dplyr::select(c(phospho_key, known_site, characterized_site)) %>%
+  separate(col = phospho_key, sep = "_", into = c("Gene", "Site")) %>%
+  mutate(novel_site = ifelse(known_site == FALSE, TRUE, FALSE)) %>%
+  mutate(known_site_rev = ifelse(known_site & characterized_site, FALSE, known_site)) %>% # if a site is characterized is automatically also known, so don't count this site twice, only count it in characterized category
+  group_by(Gene) %>%
+  summarise(known_sites = sum(known_site_rev), characterized_sites = sum(characterized_site), novel_sites = sum(novel_site)) %>%
+  pivot_longer(cols = -Gene) %>%
+  mutate(name = factor(name, levels = c("known_sites", "characterized_sites", "novel_sites"))) %>%
+  ggplot() +
+  aes(x = Gene, y = value, fill = fct_rev(name)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Detected phosphorylation sites on TCA cycle proteins", x = "Protein", y = "Number of phosphorylation sites", fill = "") +
+  theme_classic()  +
+  rotate_x_text(angle = 45)
+
+  
+  
+```
