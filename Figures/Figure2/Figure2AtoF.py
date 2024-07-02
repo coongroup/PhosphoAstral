@@ -283,7 +283,7 @@ plt.rcParams['svg.fonttype'] = 'none'
 # fig.savefig('C:\\Users\\nlancaster\OneDrive - UW-Madison\ASMS2023_oral_presentation\FinalFigures\\20230531_dil_series.svg')
 fig.tight_layout(pad = 0.2)
 file_save_path= 'C:\\Users\\nlancaster\OneDrive - UW-Madison\Astral_Phosphoproteomics_Manuscript\PythonFigures\\'
-fig.savefig(file_save_path + '20231208_dil_series_relative.svg')
+# fig.savefig(file_save_path + '20231208_dil_series_relative.svg')
 
 
 
