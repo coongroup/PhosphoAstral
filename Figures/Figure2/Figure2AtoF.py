@@ -185,7 +185,6 @@ for x in raw_data:
 # for x in total_raw_data:
 #     total_data.append(avg_min_max(x))  
 
-
 width = 0.5
 colors = ['silver','cornflowerblue','#5084C4']
 linewidth = 0.6
@@ -193,13 +192,17 @@ capsize = 5
 spacing = width * 1
 height_arr = np.array([data[0][0],data[1][0]])
 err_array = np.array([[data[0][1],data[1][1]],[data[0][2],data[1][2]]])
-width_multiplier = 0.7*0.7*(2/3)
-height_multiplier = 1*0.7*0.95
 fig = plt.figure(figsize = (1.6,2))
 ax = plt.subplot()
 x = np.arange(len(labels))
 ax.bar(x,height_arr,width=width,capsize = capsize, edgecolor = 'black',linewidth=linewidth,color = colors[2],align='center',label = 'Localized',yerr=err_array)
 # ax.bar(x,tot_height_arr,width=width,capsize = capsize, edgecolor = 'black',linewidth=linewidth,color = colors[1],align='center',label = 'Total',yerr=tot_err_array)
+
+
+spacing = [[-1*width/3,0,1*width/3],[[-1*width/3+1,1,1+1*width/3]]]
+for i in range(len(x)):
+    # distribute scatter randomly across whole width of bar
+    ax.scatter(spacing[i], raw_data[i], edgecolor='black', facecolors = 'none', s = 10 )
 
 ax.set_xticks(x)
 ax.set_xticklabels(labels)
@@ -217,8 +220,8 @@ ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 fig.tight_layout(pad = 0.2)
 plt.rcParams['svg.fonttype'] = 'none'
-file_save_path= 'C:\\Users\\nlancaster\OneDrive - UW-Madison\Astral_Phosphoproteomics_Manuscript\PythonFigures\\'
-# fig.savefig(file_save_path + '20230928_isowidths.svg')
+file_save_path= 'C:\\Users\\nlancaster\OneDrive - UW-Madison\Astral_Phosphoproteomics_Manuscript\\NatCommsSubmission\Review_Round2\DraftResponseDocument\\UpdatedManuscriptPythonFigures'
+fig.savefig(file_save_path + '\\20240702_Fig2B_isowidths.svg')
 
 
 #%%Figure 2C
