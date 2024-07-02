@@ -77,14 +77,10 @@ err_array = np.array([[data[0][1],data[1][1],data[2][1]],[data[0][2],data[1][2],
 
 
 chimerys_raw_data = [[31799,31284,31582],[41739,41771,42306],[50996,51676,51761]]
-#%%
+
 data = []
 for x in chimerys_raw_data:
     data.append(avg_min_max(x))    
-
-
-
-
 
 import numpy as np
 
@@ -147,8 +143,6 @@ fig.tight_layout()
 file_save_path= 'C:\\Users\\nlancaster\OneDrive - UW-Madison\Astral_Phosphoproteomics_Manuscript\PythonFigures\\'
 file_save_path= 'C:\\Users\\nlancaster\OneDrive - UW-Madison\Astral_Phosphoproteomics_Manuscript\\NatCommsSubmission\Review_Round2\DraftResponseDocument\\UpdatedManuscriptPythonFigures'
 fig.savefig(file_save_path + '\\20240702_SFig2A_CHIMERYS_Spectronaut.svg')
-
-
 #%% Supplementary Figure 2D + E Data Prep
 
 #Method Dev Results

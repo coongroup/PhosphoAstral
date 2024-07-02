@@ -170,9 +170,9 @@ phospho_30min_2Th = [HEK_results['20230412_HEK239T_April_phosphobatch_250ng_30mi
 phospho_30min_4Th = [HEK_results['20230412_HEK239T_April_phosphobatch_250ng_30min_4Th_500AGC_rep01'],HEK_results['20230412_HEK239T_April_phosphobatch_250ng_30min_4Th_500AGC_rep02'],HEK_results['20230412_HEK239T_April_phosphobatch_250ng_30min_4Th_500AGC_rep03']] 
 
 
-
-labels = ['4Th','2Th']#,'30min\n\n4Th']
-raw_data = [phospho_30min_4Th,phospho_30min_2Th]
+#%%
+labels = ['2','4']#,'30min\n\n4Th']
+raw_data = [phospho_30min_2Th,phospho_30min_4Th]
 data = []
 total_data = []
 def avg_min_max(arg):
@@ -195,7 +195,7 @@ err_array = np.array([[data[0][1],data[1][1]],[data[0][2],data[1][2]]])
 fig = plt.figure(figsize = (1.6,2))
 ax = plt.subplot()
 x = np.arange(len(labels))
-ax.bar(x,height_arr,width=width,capsize = capsize, edgecolor = 'black',linewidth=linewidth,color = colors[2],align='center',label = 'Localized',yerr=err_array)
+ax.bar(x,height_arr,width=width,capsize = capsize,linewidth=linewidth,color = colors[2],align='center',label = 'Localized',yerr=err_array)
 # ax.bar(x,tot_height_arr,width=width,capsize = capsize, edgecolor = 'black',linewidth=linewidth,color = colors[1],align='center',label = 'Total',yerr=tot_err_array)
 
 
@@ -206,19 +206,19 @@ for i in range(len(x)):
 
 ax.set_xticks(x)
 ax.set_xticklabels(labels)
-ax.set_yticks([0,5000,10000,15000,20000,25000,30000])
+ax.set_yticks([0,10000,20000,30000])
 # ax.legend(fancybox = True)
 
 # ax.set_title('HEK293T Phospho Replicates',fontweight = 'bold')
 
 
 # ax.set_xlabel('Loading Mass (ng)',fontweight= 'bold')
-ax.set_ylabel('Localized Phosphosites',fontweight = 'bold')
-ax.set_xlabel('Isolation Width',fontweight = 'bold')
+ax.set_ylabel('Localized Phosphosites')
+ax.set_xlabel('Isolation Width, Th           ')
 # ax.legend()
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
-fig.tight_layout(pad = 0.2)
+fig.tight_layout()
 plt.rcParams['svg.fonttype'] = 'none'
 file_save_path= 'C:\\Users\\nlancaster\OneDrive - UW-Madison\Astral_Phosphoproteomics_Manuscript\\NatCommsSubmission\Review_Round2\DraftResponseDocument\\UpdatedManuscriptPythonFigures'
 fig.savefig(file_save_path + '\\20240702_Fig2B_isowidths.svg')
