@@ -94,15 +94,11 @@ chimerys_height_arr = np.array([data[0][0],data[1][0],data[2][0]])
 chimerys_err_arr = np.array([[data[0][1],data[1][1],data[2][1]],[data[0][2],data[1][2],data[2][2]]])
 
 
-
-
-width_multiplier = 0.7*0.7
-height_multiplier = 1*0.7
-fig = plt.figure()
+fig = plt.figure(figsize = (3.1,2.1) )
 ax = plt.subplot() 
 x = np.arange(len(labels))
 ax.spines[['top','right']].set_visible(False)
-ax.set_yticks([0,10000,20000,30000,40000,50000])
+ax.set_yticks([0,10000,20000,30000,40000,50000],['0', '10000', '20000', '30000', '40000', '50000'],fontsize = 8)
 ax.set_ylim(0,55000)
 x = np.arange(3)
 width = 0.35
@@ -118,7 +114,7 @@ raw_data = rel_data
 spacing = [[-1*width/3-0.2,0-0.2,1*width/3-0.2],[-1*width/3+0.8,0.8,1*width/3+0.8],[-1*width/3+1.8,1.8,1*width/3+1.8]]
 for i in range(len(x)):
     # distribute scatter randomly across whole width of bar
-    ax.scatter(spacing[i], raw_data[i], edgecolor='black', facecolors = 'none', s = 15 )
+    ax.scatter(spacing[i], raw_data[i], edgecolor='black', facecolors = 'none',s = 8, linewidth = 0.5 )
 
 
 
@@ -128,15 +124,17 @@ raw_data = chimerys_raw_data
 spacing = [[-1*width/3+0.2,0+0.2,1*width/3+0.2],[-1*width/3+1.2,1+0.2,1*width/3+1.2],[-1*width/3+2.2,2+0.2,1*width/3+2.2]]
 for i in range(len(x)):
     # distribute scatter randomly across whole width of bar
-    ax.scatter(spacing[i], raw_data[i], edgecolor='black', facecolors = 'none', s = 15 )
+    ax.scatter(spacing[i], raw_data[i], edgecolor='black', facecolors = 'none', s = 8, linewidth = 0.5 )
 
 
 
 
 
-ax.legend()
-ax.set_ylabel('Localized Phosphosites',fontsize = 12)
-ax.set_xlabel('Gradient Length (min)',fontsize = 12)
+# ax.legend()
+ax.set_xticks([0,1,2],['7','15','30'],fontsize = 8)
+
+ax.set_ylabel('Localized Phosphosites',fontsize = 8)
+ax.set_xlabel('Gradient Length (min)',fontsize = 8)
 plt.rcParams['svg.fonttype'] = 'none'
 plt.rcParams['font.family'] = 'Arial'
 fig.tight_layout()
@@ -191,17 +189,18 @@ mz480 = avg_min_max(results_df,mz480_files)
 plot_mz = np.stack([mz380,mz480])
 
 import matplotlib.pyplot as plt
-fig, ax = plt.subplots(figsize = (2.5,3) )
+fig, ax = plt.subplots(figsize = (1.8,2.1) )
 ax.spines[['top','right']].set_visible(False)
 width = 0.8
 linewidth = 1
 colors =['#C1BFBF','#5084C4']
 x = np.arange(2)
-ax.bar(x,plot_mz[:,0], width = width, linewidth = linewidth, edgecolor = 'black',yerr = (plot_mz[:,1],plot_mz[:,2]),capsize = 10,color = colors)
-ax.set_xticks(x,['380-980','480-1080'])
-
-ax.set_ylabel('Localized Phosphosites')
-ax.set_xlabel('DIA m/z range')
+ax.bar(x,plot_mz[:,0], width = width, linewidth = linewidth,yerr = (plot_mz[:,1],plot_mz[:,2]),capsize = 3.5,color = colors)
+ax.set_xticks(x,['380-980','480-1080'],fontsize = 5)
+ax.set_yticks([0,5000,10000,15000,20000,25000],['0', '5000', '10000', '15000', '20000', '25000'],fontsize = 8)
+ax.set_ylim(0,28000)
+ax.set_ylabel('Localized Phosphosites',fontsize = 8)
+ax.set_xlabel('DIA m/z range',fontsize = 8)
 
 #add dots on plot for each injection
 raw_data = [raw_data_for_plots(results_df, mz380_files),raw_data_for_plots(results_df, mz480_files)]
@@ -209,7 +208,7 @@ raw_data = [raw_data_for_plots(results_df, mz380_files),raw_data_for_plots(resul
 spacing = [[-1*width/3,1*width/3],[[-1*width/3+1,1+1*width/3]]]
 for i in range(len(x)):
     # distribute scatter randomly across whole width of bar
-    ax.scatter(spacing[i], raw_data[i], edgecolor='black', facecolors = 'none', s = 15 )
+    ax.scatter(spacing[i], raw_data[i], edgecolor='black', facecolors = 'none', s = 8, linewidth = 0.5 )
 
 
 
@@ -236,17 +235,21 @@ agc500 = avg_min_max(results_df,agc500_files)
 plot_agc = np.stack([agc100,agc500])
 
 import matplotlib.pyplot as plt
-fig, ax = plt.subplots(figsize = (2.5,3) )
+fig, ax = plt.subplots(figsize = (1.8,2.1) )
 ax.spines[['top','right']].set_visible(False)
 width = 0.8
 linewidth = 1
 colors =['#C1BFBF','#5084C4']
 x = np.arange(2)
-ax.bar(x,plot_agc[:,0], width = width, linewidth = linewidth, edgecolor = 'black',yerr = (plot_agc[:,1],plot_agc[:,2]),capsize = 10,color = colors)
+ax.bar(x,plot_agc[:,0], width = width, linewidth = linewidth,yerr = (plot_agc[:,1],plot_agc[:,2]),capsize = 3.5,color = colors)
 ax.set_xticks(x,['1e4','5e4'])
 
-ax.set_ylabel('Localized Phosphosites')
-ax.set_xlabel('AGC Target (# of charges)')
+ax.set_ylabel('Localized Phosphosites',fontsize = 8)
+ax.set_xlabel('AGC Target (# of charges)',fontsize = 8)
+ax.set_ylim(0,28000)
+ax.set_yticks([0,5000,10000,15000,20000,25000],['0', '5000', '10000', '15000', '20000', '25000'],fontsize = 8)
+ax.set_xticks([0,1],['1e4','5e4'],fontsize = 8)
+
 
 #add dots on plot for each injection
 raw_data = [raw_data_for_plots(results_df, agc100_files),raw_data_for_plots(results_df, agc500_files)]
@@ -254,7 +257,7 @@ raw_data = [raw_data_for_plots(results_df, agc100_files),raw_data_for_plots(resu
 spacing = [[-1*width/3,1*width/3],[[-1*width/3+1,1+1*width/3]]]
 for i in range(len(x)):
     # distribute scatter randomly across whole width of bar
-    ax.scatter(spacing[i], raw_data[i], edgecolor='black', facecolors = 'none', s = 15 )
+    ax.scatter(spacing[i], raw_data[i], edgecolor='black', facecolors = 'none',s = 8, linewidth = 0.5)
 
 
 
