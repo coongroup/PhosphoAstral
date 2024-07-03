@@ -202,7 +202,7 @@ ax.bar(x,height_arr,width=width,capsize = capsize,linewidth=linewidth,color = co
 spacing = [[-1*width/3,0,1*width/3],[[-1*width/3+1,1,1+1*width/3]]]
 for i in range(len(x)):
     # distribute scatter randomly across whole width of bar
-    ax.scatter(spacing[i], raw_data[i], edgecolor='black', facecolors = 'none', s = 10 )
+    ax.scatter(spacing[i], raw_data[i], edgecolor='black', facecolors = 'none', s = 10,linewidth = 5 )
 
 ax.set_xticks(x)
 ax.set_xticklabels(labels)
