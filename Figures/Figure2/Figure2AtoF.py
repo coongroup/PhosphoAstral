@@ -185,14 +185,15 @@ for x in raw_data:
 # for x in total_raw_data:
 #     total_data.append(avg_min_max(x))  
 
-width = 0.5
+width = 0.75
+
 colors = ['silver','cornflowerblue','#5084C4']
 linewidth = 0.6
 capsize = 5
 spacing = width * 1
 height_arr = np.array([data[0][0],data[1][0]])
 err_array = np.array([[data[0][1],data[1][1]],[data[0][2],data[1][2]]])
-fig = plt.figure(figsize = (1.6,2))
+fig = plt.figure(figsize = (1.75,2.1))
 ax = plt.subplot()
 x = np.arange(len(labels))
 ax.bar(x,height_arr,width=width,capsize = capsize,linewidth=linewidth,color = colors[2],align='center',label = 'Localized',yerr=err_array)
@@ -202,19 +203,19 @@ ax.bar(x,height_arr,width=width,capsize = capsize,linewidth=linewidth,color = co
 spacing = [[-1*width/3,0,1*width/3],[[-1*width/3+1,1,1+1*width/3]]]
 for i in range(len(x)):
     # distribute scatter randomly across whole width of bar
-    ax.scatter(spacing[i], raw_data[i], edgecolor='black', facecolors = 'none', s = 10,linewidth = 5 )
+    ax.scatter(spacing[i], raw_data[i], edgecolor='black', facecolors = 'none', s = 10,linewidth = 0.5 )
 
 ax.set_xticks(x)
-ax.set_xticklabels(labels)
-ax.set_yticks([0,10000,20000,30000])
+ax.set_xticklabels(labels,fontsize = 8)
+ax.set_yticks([0,10000,20000,30000],['0','10000','20000','30000'], fontsize = 8)
 # ax.legend(fancybox = True)
 
 # ax.set_title('HEK293T Phospho Replicates',fontweight = 'bold')
 
 
 # ax.set_xlabel('Loading Mass (ng)',fontweight= 'bold')
-ax.set_ylabel('Localized Phosphosites')
-ax.set_xlabel('Isolation Width, Th           ')
+ax.set_ylabel('Localized Phosphosites',fontsize = 8)
+ax.set_xlabel('Isolation Width, Th           ',fontsize = 8)
 # ax.legend()
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
